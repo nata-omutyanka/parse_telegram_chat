@@ -1,0 +1,56 @@
+from docx import Document
+import re
+import pandas as pd
+
+# Load the document
+file_path = "/mnt/data/Пример сообщений из телеграма.docx"
+doc = Document(file_path)
+
+# Extract text from the document
+messages = []
+for paragraph in doc.paragraphs:
+    messages.append(paragraph.text)
+
+# Define patterns for coordinates and place names
+coordinate_pattern = r'\b\d{1,3}\.\d{1,7}, ?\d{1,3}\.\d{1,7}\b'
+location_pattern = r'\b(?:улица|проезд|на|возле|в|около|пляж|край|скала|лестницы|отель|маяк|город|район|хутор|администрация|Анапа|Витязево|Краснодар)\b.*'
+
+# Initialize a new structure for final grouping
+final_grouped_data = []
+current_entry = None
+
+# Iterate through original parsed messages and group logically
+for idx, message in enumerate(messages):
+    # Check if the message contains a timestamp, coordinates, or location info
+    time_match = re.search(r'\[\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}\]', message)
+    coordinates = re.findall(coordinate_pattern, message)
+    location = re.search(location_pattern, message, re.IGNORECASE)
+
+    # If we find a new message (with timestamp), save the previous and start a new one
+    if time_match:
+        if current_entry:
+            final_grouped_data.append(current_entry)
+        current_entry = {
+            "Время сообщения": time_match.group(0)[1:-1],
+            "Координаты": None,
+            "Адрес": None,
+            "Описание": None,  # Placeholder for further description
+            "Контекст": extract_context(idx, messages)
+        }
+
+    # Update current entry with coordinates and location if found
+    if current_entry:
+        if coordinates:
+            current_entry["Координаты"] = ", ".join(coordinates)
+        if location:
+            current_entry["Адрес"] = location.group(0)
+
+# Add the last entry if it exists
+if current_entry:
+    final_grouped_data.append(current_entry)
+
+# Convert to DataFrame and save
+final_grouped_df = pd.DataFrame(final_grouped_data)
+final_grouped_output_path = "/mnt/data/final_coordinates_and_locations.xlsx"
+final_grouped_df.to_excel(final_grouped_output_path, index=False)
+final_grouped_output_path
